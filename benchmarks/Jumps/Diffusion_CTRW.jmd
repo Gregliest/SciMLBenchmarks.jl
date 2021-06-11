@@ -15,20 +15,23 @@ Here we implement a 1D continuous time random walk approximation of diffusion fo
 ```julia
 N = 256
 h = 1 / N
-rn = @empty_reaction_network
+rn = make_empty_network()
 function getDiffNetwork!(rn,N)
-    for i = 1:N
-        addspecies!(rn, Symbol(:u, i))
+    species = (@variables u[1:N])[1]
+    for var in species
+        addspecies!(rn, var)
     end
-    addparam!(rn, :β)
-    for i = 1:N
-        (i < N) && addreaction!(rn, :β, (Symbol(:u,i)=>1,), (Symbol(:u,i+1)=>1,))
-        (i > 1) && addreaction!(rn, :β, (Symbol(:u,i)=>1,), (Symbol(:u,i-1)=>1,))
+    @parameters β
+    addparam!(rn, β)
+    for i in eachindex(species)
+      addreaction!(rn, Reaction(β, [species[i]], [1]))
+        (i < N) && addreaction!(rn, Reaction(β, [species[i+1]], [1]))
+        (i > 1) && addreaction!(rn, Reaction(β, [species[i-1]], [1]))
     end
     rn
 end
 getDiffNetwork!(rn,N)
-addjumps!(rn, build_regular_jumps=false, minimal_jumps=true)
+# addjumps!(rn, build_regular_jumps=false, minimal_jumps=true)
 rnpar = [1/(h*h)]
 u0 = 10*ones(Int64, N)
 tf = .01
@@ -41,7 +44,7 @@ prob    = prob = DiscreteProblem(u0, (0.0, tf), rnpar)
 ploth   = plot(reuse=false)
 for (i,method) in enumerate(methods)
     println("Benchmarking method: ", method)
-    jump_prob = JumpProblem(rn, prob, method, save_positions=(false,false))
+    jump_prob = JumpProblem(rn, prob, method)
     sol = solve(jump_prob, SSAStepper(), saveat=tf/1000.)
     plot!(ploth,sol.t,sol[Int(N//2),:],label=shortlabels[i], format=fmt)
 end
